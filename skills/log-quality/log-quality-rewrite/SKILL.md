@@ -44,9 +44,11 @@ description: 将不合规的日志改写为符合 log-quality-standard 的版本
 
 ### 第二步：按标准逐条重写
 
-对每条不合规日志，按 `log-quality-standard` 逐项修正：
+对每条不合规日志，读取 `log-quality-standard`，按其中所有标准逐项修正。
 
-#### 标准1：分级修正
+> 注意：以下示例按当前 standard 中的标准名称展示，运行时按 standard 实际内容执行，不写死标准编号。
+
+#### 按 standard 中"分级清晰"规则修正
 
 ```python
 # 原：logger.info("Connection pool full")  # 异常打了 INFO
@@ -56,7 +58,7 @@ description: 将不合规的日志改写为符合 log-quality-standard 的版本
 # 改：logger.info("Retry succeeded, attempts={}".format(attempts))
 ```
 
-#### 标准2：描述补充
+#### 按 standard 中"描述充分"规则补充
 
 ```python
 # 原：logger.error("Link failed")
@@ -75,7 +77,7 @@ description: 将不合规的日志改写为符合 log-quality-standard 的版本
 # )
 ```
 
-#### 标准3：组件标识
+#### 按 standard 中"组件归属"规则修正
 
 ```python
 # 原：logger.error("Request failed")
@@ -84,7 +86,7 @@ description: 将不合规的日志改写为符合 log-quality-standard 的版本
 # 检查：是否需要新增组件前缀
 ```
 
-#### 标准4：防刷屏
+#### 按 standard 中"防刷屏"规则修正
 
 ```python
 # 原（在循环内）：
@@ -101,7 +103,7 @@ description: 将不合规的日志改写为符合 log-quality-standard 的版本
 #         error_count, WINDOW_SECONDS, error_count))
 ```
 
-#### 标准5：链路追踪
+#### 按 standard 中"链路追踪"规则修正
 
 ```python
 # 原：logger.error("[llm] Inference failed")
@@ -111,7 +113,7 @@ description: 将不合规的日志改写为符合 log-quality-standard 的版本
 # trace_id = context.get("trace_id", generate_trace_id())
 ```
 
-#### 标准6：隐私保护
+#### 按 standard 中"隐私保护"规则修正
 
 ```python
 # 原：logger.error("User query failed: {}".format(user_query))
@@ -151,13 +153,11 @@ description: 将不合规的日志改写为符合 log-quality-standard 的版本
 ```markdown
 ## 修改汇总
 
-- **总修改数**：X 条
-- **标准1（分级）修复**：X 条
-- **标准2（描述）修复**：X 条
-- **标准3（组件）修复**：X 条
-- **标准4（防刷屏）修复**：X 条
-- **标准5（链路）修复**：X 条
-- **标准6（隐私）修复**：X 条
+> 读取 `log-quality-standard`，按实际定义的标准数量和名称动态生成。
+
+| 修改项 | 数量 |
+|--------|------|
+| （按 standard 动态填入） | X 条 |
 ```
 
 ---

@@ -59,7 +59,7 @@ description: 从零为新功能编写符合 log-quality-standard 的日志语句
 | 循环内失败 | 最后统一打 ERROR | ERROR（防刷屏） |
 | 退出函数（成功/失败） | 可选，仅关键路径打 INFO | INFO |
 
-### 第三步：按 6 条标准编写每条日志
+### 第三步：按 `log-quality-standard` 中所有标准编写每条日志
 
 #### 示例：为"链路建连"功能写日志
 

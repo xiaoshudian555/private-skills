@@ -23,8 +23,8 @@ description: 从零为新功能编写符合 log-quality-standard 的日志语句
 | 代码片段 | 必需 | 要新增日志的代码（包含业务逻辑） |
 | 涉及组件 | 必需 | 如 cmotor/router、vllm/scheduler |
 | 已有日志 | 可选 | 该功能已有哪些日志（避免重复） |
-
----
+| 目标仓库 | 可选 | cmotor / pymotor / mindie-llm / vllm / vllm-ascend（不填则从代码片段路径或 PROJECT-NAV.md 推断） |
+| 代码路径 | 可选 | 仓库在机器上的路径，如 `/home/h00906152/projects/cmotor`，不填则按 PROJECT-NAV.md 推断 |
 
 ## 输出
 
@@ -36,6 +36,55 @@ description: 从零为新功能编写符合 log-quality-standard 的日志语句
 ---
 
 ## 工作流程
+
+### 第零步：确认目标代码仓的语言和格式（必须先执行）
+
+> **重要：编写之前必须先了解目标代码的日志语言和格式风格，确保输出的日志与周围代码保持一致。**
+
+**1. 确定目标仓库和代码路径**
+
+- 如果用户指定了目标仓库和代码路径，直接使用
+- 如果未指定，从以下线索推断：
+  - 代码片段中的文件路径（如 `cmotor/src/router/...` → cmotor）
+  - 代码片段中的 import / include 语句（如 `from motor import` → pymotor）
+  - PROJECT-NAV.md 中的仓库路径映射
+
+**2. 扫描代码仓确认两个语言维度**
+
+用 grep 提取目标仓库中同模块（或同文件）的日志语句，判断：
+
+| 维度 | cmotor（C++） | pymotor（Python） | mindie-llm（C++） | vllm-ascend（Python） |
+|------|--------------|-------------------|------------------|---------------------|
+| 编程语言 | `LOG_I` / `LOG_W` / `LOG_E` / `SLOG_ERROR` 等宏 | `logger.info()` / `self.logger.warning()` 等方法 | 同 cmotor | 同 pymotor |
+| 自然语言 | 英文 / 中文 / 混用（从日志内容判断） | 英文 / 中文 / 混用 | 同 cmotor | 同 pymotor |
+
+**grep 示例（按仓库选择）：**
+
+```bash
+# cmotor / mindie-llm：扫描 C++ 文件中的日志宏
+grep -rn "LOG_I\|LOG_W\|LOG_E\|LOG_D\|SLOG_\|MINDIE_LLM_LOG" \
+  --include="*.cpp" --include="*.h" {代码路径}/src/{模块名}
+
+# pymotor / vllm-ascend：扫描 Python 文件中的日志方法
+grep -rn "logger\.\(info\|warning\|error\|debug\)" \
+  --include="*.py" {代码路径}/motor  # pymotor 源码在 motor/ 子目录
+```
+
+**3. 记录格式风格作为编写约束**
+
+从扫描结果中提取该仓库的格式风格，作为编写时的格式约束：
+
+| 格式维度 | 确认结果 |
+|---------|---------|
+| 编程语言 | C++ / Python |
+| 自然语言 | 英文 / 中文 / 混用 |
+| 宏/函数风格 | 如 `SLOG_ERROR(...)` vs `logger.error(...)` |
+| 组件前缀格式 | 如 `[cmotor/router]` vs `[cmotor-router]` vs 无前缀 |
+| trace_id 位置 | 如 `trace_id=xxx, ` 前缀固定位置 |
+| 格式化占位符风格 | `%s` / `{name}` / `{name}=%s` 混用 |
+| 日志方法调用形式 | `logger.error(...)` vs `self.logger.error(...)` vs `_logger.error(...)` |
+
+> 如果同一仓库中混用多种风格，以被新增日志所在文件的风格为准。
 
 ### 第一步：分析代码逻辑
 
@@ -60,6 +109,8 @@ description: 从零为新功能编写符合 log-quality-standard 的日志语句
 | 退出函数（成功/失败） | 可选，仅关键路径打 INFO | INFO |
 
 ### 第三步：按 `log-quality-standard` 中所有标准编写每条日志
+
+**必须遵循第零步确认的格式约束**（编程语言 + 自然语言 + 宏/函数风格 + 组件前缀 + trace_id 位置 + 占位符风格），示例中展示的风格仅作参考，实际输出以目标代码仓的风格为准。
 
 #### 示例：为"链路建连"功能写日志
 
@@ -99,6 +150,8 @@ int establish_link(const string& group_id, const string& peer) {
 ```
 
 ### 第四步：输出代码模板
+
+模板中使用的宏/函数名、格式风格**必须与第零步确认的结果一致**，不要出现 C++ 代码中用 Python 风格日志、或中文日志混入英文代码库的情况。
 
 ```cpp
 // === 链路建连日志（按 log-quality-standard 编写） ===
@@ -153,6 +206,8 @@ logger_info("[cmotor/router] trace_id=%s, Link established. group_id=%s, peer=%s
 [ ] ERROR/WARNING 是否带了 trace_id？
 [ ] 是否包含任何用户输入、prompt、PII？
 [ ] 占位符是否完整（{id}、%s 等）？
+[ ] 编程语言风格是否与目标代码一致？（宏 vs 方法调用）
+[ ] 自然语言是否与目标代码一致？（英文 vs 中文）
 ```
 
 ---
@@ -163,4 +218,4 @@ logger_info("[cmotor/router] trace_id=%s, Link established. group_id=%s, peer=%s
 - 如果代码中已有日志，先评估是否合规，不合规的用 rewrite 方案替代
 - 防刷屏计数器的维护方式需要在代码注释中说明
 - trace_id 如果代码中没有，需要在函数签名中新增参数或从上下文获取
-- 输出可以直接粘贴，但需注意语言（C++/Python）与代码一致
+- **格式一致性优先**：输出的代码模板必须与目标代码仓的语言风格（编程语言 + 自然语言）和格式惯例保持一致，不要出现 C++ 代码中混用 Python 风格日志、或中文日志混入英文代码库的情况

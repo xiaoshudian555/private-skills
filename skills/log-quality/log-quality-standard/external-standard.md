@@ -204,6 +204,65 @@ AI 推理服务（MindIE-PyMotor / vLLM-Ascend）的日志质量标准，定义�
 [WARN] param error               ← 什么参数、期望什么值，都没有
 ```
 
+#### 4.5 raise / 抛出异常前必须打日志
+
+**原则：`raise Exception(...)` 或 `return error` 之前必须打日志，说明是什么 error、可能原因、下一步怎么排查。**
+
+| 场景 | 要求 | 示例 |
+|------|------|------|
+| raise 之前 | 必须打 ERROR/WARNING 日志，包含错误描述 + 可能原因 + 排查方向 | 见下方正确示例 |
+| return error 之前 | 必须打日志（同 raise），特别是链路/调度等关键路径 | 同左 |
+| 连续 raise 或 retry 最终失败 | 最终失败打一条 ERROR，列出所有尝试和最终根因 | 同左 |
+
+**正确示例：**
+```python
+# Python
+try:
+    ret = connect_to_peer(peer)
+except Exception as e:
+    logger.error(
+        "[cmotor/router] Connect to peer failed. "
+        "peer={}, error={}, "
+        "可能原因：1. 网络不通 2. 对端端口未监听 3. 防火墙拦截 "
+        "可检查：ping {peer_ip}, telnet {peer_ip} {port}, ss -tlnp | grep {port} "
+        "trace_id={}".format(peer, e, peer_ip, port, port, trace_id)
+    )
+    raise ConnectionError(f"connect failed: {e}") from e
+```
+
+```cpp
+// C++
+int ret = connect_to_peer(peer);
+if (ret != 0) {
+    SLOG_ERROR("Link establish failed. "
+               "group_id=%s, peer=%s, ret=%d, "
+               "可能原因：1. 网络不通 2. 对端未监听 3. 认证失败 "
+               "可检查：ping %s, telnet %s %s, ss -tlnp | grep %s",
+               group_id.c_str(), peer.c_str(), ret,
+               peer_ip.c_str(), peer_ip.c_str(), port.c_str(), port.c_str());
+    return -1;  // 或 throw std::runtime_error(...)
+}
+```
+
+**错误示例（不要这样写）：**
+```python
+# ❌ raise 前没有日志，error 信息全靠异常类型猜测
+raise ConnectionError("link failed")
+
+# ❌ 有日志但没有排查方向
+logger.error("connect failed: {}".format(e))
+raise ConnectionError("connect failed") from e
+
+# ❌ return 前没有日志
+return -1;
+```
+
+**判断规则：**
+- 所有业务层 `raise`（不含框架/库自动抛出的）**之前**必须打日志
+- 所有关键路径 `return error`（非 OK 返回）**之前**必须打日志
+- 日志内容必须包含：错误描述 + 可能原因 + 排查方向（与标准4.1一致）
+- 日志级别与错误严重程度一致（业务流程中断 → ERROR；局部异常 → WARNING）
+
 ---
 
 ### 标准 5：组件归属明确
@@ -392,4 +451,5 @@ trace_id: {uuid 或自定义 ID}
 [ ] 是否在组件标识中写明了仓库和子模块？
 [ ] 是否包含任何用户输入、prompt 或 PII？（禁止出现）
 [ ] 如果在循环内，是否考虑了防刷屏合并？
+[ ] raise / return error 之前是否已经打了日志？
 ```

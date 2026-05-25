@@ -52,8 +52,9 @@ grep -rn "LOG_I\|LOG_W\|LOG_E\|LOG_D\|MINDIE_LLM_LOG\|ULOG_" \
 
 **pymotor（Python）：**
 ```bash
-grep -rn "logger\.\(info\|warning\|error\|debug\)\|logging\.\(info\|warning\|error\|debug\)\|LOG\.\(info\|warning\|error\|debug\)" \
-  --include="*.py" {代码根目录}
+# 在 bash 中直接执行（转义由 shell 处理）
+grep -rn "logger\.\(info\|warning\|error\|debug\)" \
+  --include="*.py" {代码根目录}/motor
 ```
 
 **vllm-ascend（Python）：**
@@ -83,11 +84,16 @@ grep -rn "logger\.\(info\|warning\|error\|debug\)\|self\.logger\.\(info\|warning
 
 对每条日志，检查是否符合 `log-quality-standard` 中定义的所有标准。注意：**按标准分组输出**，不是按日志分组输出。
 
-#### 标准1~N：已有日志质量检查
+> **重要：标准5（组件归属明确）不适用于代码扫描**
+>
+> 扫描代码仓时，组件标识（如 `[cmotor/router]`）是 logger 运行时注入的，不是源码字符串的一部分。例如源码中写的是 `logger.error("link failed")`，运行时会变成 `[cmotor/router] link failed`。
+> 因此扫描代码时，**不检查标准5（组件归属）**。扫描日志文件时（`log-quality-scan`）才检查此项。
+
+#### 标准1~N（除标准5外）：已有日志质量检查
 
 > 以下为当前 standard 中各标准的内容摘要，运行时读取 `log-quality-standard` 原文确认。
 
-（标准1~N 的具体检查项，按 standard 实际内容动态读取）
+（标准1~N 的具体检查项，按 standard 实际内容动态读取，跳过标准5）
 
 #### 标准7：关键位置日志完整性检测
 
@@ -139,10 +145,18 @@ for each function in target_modules:
 
 ## 汇总统计
 
-| 标准 | 合规数 | 违规数 | 覆盖率 |
-|------|--------|--------|--------|
-| `log-quality-standard` 中的所有标准（按 standard 动态生成） | X | X | XX% |
-| 标准A：关键位置日志完整性（本 skill 扩展检查） | X | X | XX% |
+| 标准 | 合规数 | 违规数 | 覆盖率 | 代码扫描时 |
+|------|--------|--------|--------|-----------|
+| `log-quality-standard` 中的所有标准（按 standard 动态生成） | X | X | XX% | |
+| 标准1：事件必记 | X | X | XX% | ✅ 检查 |
+| 标准2：运维管理 | X | X | XX% | ✅ 检查 |
+| 标准3：分级清晰 | X | X | XX% | ✅ 检查 |
+| 标准4：描述充分 | X | X | XX% | ✅ 检查 |
+| 标准5：组件归属明确 | X | X | XX% | ❌ **不检查**（运行时注入，代码中不可见） |
+| 标准6：防刷屏 | X | X | XX% | ✅ 检查 |
+| 标准7：链路追踪 | X | X | XX% | ✅ 检查 |
+| 标准8：隐私保护 | X | X | XX% | ✅ 检查 |
+| 标准9：关键位置日志完整性（扩展） | X | X | XX% | ✅ 检查 |
 
 ---
 
@@ -189,6 +203,14 @@ for each function in target_modules:
 
 ## 注意事项
 
+- **grep pattern 转义问题**：在 Python `subprocess.run()` 中使用 `text=True`（默认）时，shell 元字符如 `\|` 不会被展开——必须用 `grep -E` + BRE 语法（`|` 而非 `\|`），或改用 `shell=True`
+  - ✅ 正确：`grep -rEn "logger\.(error|warning|info|debug)\("`
+  - ❌ 错误：`grep -rn "logger\.\(error\|warning\)\("`（`\|` 在 subprocess 中是字面值）
+- **仓库源码子目录**：pymotor 源码在 `motor/` 子目录而非仓库根；cmotor 在仓库根；扫描前先确认源码实际路径
+- **路径前缀剥离**：grep 返回完整路径，剥离前缀时先确认路径确实以该前缀开头
+- **模块名提取**：`rel = full_path[len(prefix):]` 前提是 `full_path.startswith(prefix)`，否则用 `rel = "/".join(full_path.split("/")[-2:])` 取最后两级
+- **上下文行获取**：不要用 `grep -B n -A n`，其输出格式不便解析；直接 `open(file)` 读文件后按行号切
+- **raise/return 检查**：检查 `raise` 前是否有日志时，直接读源文件按行号定位，不要依赖 grep 上下文字符串
 - 占位符（`{id}`、`%s`、`%d`）原样保留，不替换为实际值
 - 同一日志语句在同一个文件:行号位置，只出现一次，不因多处调用而重复列
 - 防刷屏检查需要结合代码上下文（如循环结构），在上下文不足时标注"需结合代码确认"

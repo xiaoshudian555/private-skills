@@ -1,6 +1,6 @@
 ---
 name: log-diagnosis-mindie
-description: MindIE-PyMotor 日志诊断调度器。接收 MindIE/PyMotor 相关日志，自动判断问题方向并调度对应子skill进行诊断。触发词：日志诊断、日志分析、日志定位、故障定位、MindIE日志、PyMotor日志。
+description: MindIE/cmotor 日志诊断调度器。接收 MindIE/PyMotor/cmotor 相关日志，自动判断问题方向并调度对应子 skill 诊断。触发词：日志诊断、日志分析、日志定位、故障定位、MindIE日志、PyMotor日志、大EP拉不起来、coordinator not ready。
 ---
 
 # MindIE-PyMotor 日志诊断调度器
@@ -56,6 +56,9 @@ Step 4：汇总输出
 
 | 错误特征 | 映射方向 | 对应子 skill |
 |----------|----------|--------------|
+| 大EP拉不起来/启动失败/coordinator not ready/无 ready!!! | 大EP启动 | `log-diagnosis-large-ep-startup` |
+| failed to initialize server cluster / Init controller failed | 大EP启动 | `log-diagnosis-large-ep-startup` |
+| coordinator start successful 但长期 not ready | 大EP启动 | `log-diagnosis-large-ep-startup` |
 | gRPC 超时/连接失败/链路超时 | PD建链 | `log-diagnosis-pd-link-establishment` |
 | 建链失败/link failed/链路异常 | PD建链 | `log-diagnosis-pd-link-establishment` |
 | 缩容/缩P/释放P实例/保D | 缩P保D | `log-diagnosis-shrink-p-reserve-d` |
@@ -72,9 +75,10 @@ Step 4：汇总输出
 ---
 
 选项：
-A. PD建链问题（P节点与D节点之间的KVCache链路建立失败）
-B. 缩P保D问题（PD分离架构中D实例故障后的缩容恢复流程异常）
-C. 其他 MindIE 异常
+A. 大EP启动问题（Controller/Coordinator 无法到达 ready!!!）
+B. PD建链问题（P节点与D节点之间的KVCache链路建立失败）
+C. 缩P保D问题（PD分离架构中D实例故障后的缩容恢复流程异常）
+D. 其他 MindIE 异常
 
 请只输出选项字母和简短理由（1-2句话）。
 ```
@@ -84,7 +88,11 @@ C. 其他 MindIE 异常
 根据 Step 2 的判断结果，加载对应子 skill：
 
 ```
-if 方向 == "PD建链":
+if 方向 == "大EP启动":
+    skill_view(name="log-diagnosis-large-ep-startup")
+    执行子 skill 的诊断流程
+    若卡在阶段 4→5 且命中建链日志，继续加载 log-diagnosis-pd-link-establishment 下钻
+elif 方向 == "PD建链":
     skill_view(name="log-diagnosis-pd-link-establishment")
     执行子 skill 的诊断流程
 elif 方向 == "缩P保D":
@@ -124,6 +132,7 @@ elif 方向 == "无法判断" or 命中多个方向:
 
 | 子 skill | 状态 | 说明 |
 |----------|------|------|
+| `log-diagnosis-large-ep-startup` | ✅ 已就绪 | 大 EP 启动失败（cmotor + 建链下钻） |
 | `log-diagnosis-pd-link-establishment` | ✅ 已就绪 | PD建链失败诊断 |
 | `log-diagnosis-shrink-p-reserve-d` | ✅ 已就绪 | 缩P保D流程异常诊断 |
 
